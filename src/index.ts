@@ -1,3 +1,17 @@
+/**
+ * dsh-code-review-ai — AI代码审查
+ *
+ * 功能：
+ * 1. 安全检测
+ * 2. 性能分析
+ * 3. 风格检查
+ * 4. 最佳实践
+ * 5. 健康评分
+ *
+ * 工具：review_file, review_directory, review_diff
+ * 命令：/review
+ * 配置：enabled
+ */
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { execSync } from 'child_process';
 import { join, extname } from 'path';
