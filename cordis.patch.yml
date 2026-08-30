@@ -1,0 +1,5 @@
+- insert:
+    - id: code-review-ai
+      name: dsh-code-review-ai
+      config:
+        enabled: true
