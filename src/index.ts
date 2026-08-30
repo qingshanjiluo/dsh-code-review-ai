@@ -364,113 +364,78 @@ function walkDir(dir: string, pattern: string): string[] {
   return files;
 }
 
-export default function plugin(ctx: any) {
-  const settings = ctx.settings.get<Config>(name);
-  const config = configSchema.parse(settings || {});
+export function apply(ctx: any, config?: Config) {
+  const cfg = config || configSchema.parse({});
 
-  ctx.tools.register(name, 'review_file', {
-    description: 'Review a single file for code quality issues',
+  ctx.tools.register({
+    name: 'review_file',
+    description: '审查单个文件',
     parameters: z.object({
-      file: z.string().describe('Path to the file to review'),
+      file: z.string(),
     }),
     execute: async (params: { file: string }) => {
-      const result = reviewFile(params.file, config);
-      if (!result) {
-        return { error: 'File not found or exceeds max file size' };
-      }
+      const result = reviewFile(params.file, cfg);
+      if (!result) return { error: '文件不存在或超过大小限制' };
       return result;
     },
   });
 
-  ctx.tools.register(name, 'review_directory', {
-    description: 'Review all files in a directory',
+  ctx.tools.register({
+    name: 'review_directory',
+    description: '审查目录所有文件',
     parameters: z.object({
-      path: z.string().optional().describe('Directory path (defaults to current directory)'),
-      pattern: z.string().optional().describe('File pattern filter (e.g., *.ts)'),
+      path: z.string().optional(),
+      pattern: z.string().optional(),
+    }),
     }),
     execute: async (params: { path?: string; pattern?: string }) => {
       const dir = params.path || '.';
       const pattern = params.pattern || '*';
       const files = walkDir(dir, pattern);
       const results: ReviewResult[] = [];
-
       for (const file of files) {
-        const result = reviewFile(file, config);
+        const result = reviewFile(file, cfg);
         if (result) results.push(result);
       }
-
       const totalIssues = results.reduce((acc, r) => acc + r.summary.total, 0);
-      const avgScore = results.length > 0
-        ? Math.round(results.reduce((acc, r) => acc + r.healthScore, 0) / results.length)
-        : 0;
-
-      return {
-        directory: dir,
-        fileCount: results.length,
-        totalIssues,
-        averageHealthScore: avgScore,
-        files: results,
-      };
+      const avgScore = results.length > 0 ? Math.round(results.reduce((acc, r) => acc + r.healthScore, 0) / results.length) : 0;
+      return { directory: dir, fileCount: results.length, totalIssues, averageHealthScore: avgScore, files: results };
     },
   });
 
-  ctx.tools.register(name, 'review_diff', {
-    description: 'Review git diff output for issues in changed code',
+  ctx.tools.register({
+    name: 'review_diff',
+    description: '审查 git diff',
     parameters: z.object({
-      diff: z.string().describe('Git diff output to review'),
+      diff: z.string(),
     }),
     execute: async (params: { diff: string }) => {
-      const results = reviewDiff(params.diff, config);
+      const results = reviewDiff(params.diff, cfg);
       const totalIssues = results.reduce((acc, r) => acc + r.summary.total, 0);
-
-      return {
-        fileCount: results.length,
-        totalIssues,
-        files: results,
-      };
+      return { fileCount: results.length, totalIssues, files: results };
     },
   });
 
-  ctx.commands.register(name, 'review', {
-    description: 'Review current directory or specified path for code quality',
-    parameters: z.object({
-      path: z.string().optional().describe('Path to review'),
-    }),
-    execute: async (params: { path?: string }) => {
-      const dir = params.path || '.';
+  ctx.commands.register({
+    name: 'review',
+    description: '代码审查',
+    async execute(args: string) {
+      const dir = args.trim() || '.';
       const files = walkDir(dir, '*');
       const results: ReviewResult[] = [];
-
       for (const file of files) {
-        const result = reviewFile(file, config);
+        const result = reviewFile(file, cfg);
         if (result) results.push(result);
       }
-
       const totalIssues = results.reduce((acc, r) => acc + r.summary.total, 0);
-      const avgScore = results.length > 0
-        ? Math.round(results.reduce((acc, r) => acc + r.healthScore, 0) / results.length)
-        : 0;
-
-      const output = [
-        `Code Review Results for: ${dir}`,
-        `Files reviewed: ${results.length}`,
-        `Total issues: ${totalIssues}`,
-        `Average health score: ${avgScore}/100`,
-        '',
-      ];
-
-      for (const r of results) {
-        if (r.summary.total > 0) {
-          output.push(`${r.file} (${r.language}) - Score: ${r.healthScore}/100`);
-          if (r.issues.security.length) output.push(`  Security: ${r.issues.security.length}`);
-          if (r.issues.performance.length) output.push(`  Performance: ${r.issues.performance.length}`);
-          if (r.issues.style.length) output.push(`  Style: ${r.issues.style.length}`);
-          if (r.issues.bestPractices.length) output.push(`  Best Practices: ${r.issues.bestPractices.length}`);
-          output.push('');
-        }
-      }
-
-      return output.join('\n');
+      const avgScore = results.length > 0 ? Math.round(results.reduce((acc, r) => acc + r.healthScore, 0) / results.length) : 0;
+      return { content: `审查完成: ${results.length} 个文件, ${totalIssues} 个问题, 平均评分 ${avgScore}/100` };
     },
+  });
+
+  ctx.settings.register({
+    title: 'code-review-ai',
+    description: 'AI 代码审查',
+    config: configSchema,
   });
 }
